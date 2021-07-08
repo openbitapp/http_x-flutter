@@ -17,6 +17,8 @@ dependencies:
     path: ../gl_functional-flutter
   isolates:
     path: ../isolates-flutter
+  cache:
+    path: ../cache-flutter
 
 dev_dependencies:
   pedantic: ^1.10.0

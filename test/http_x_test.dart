@@ -10,15 +10,33 @@ void main() {
       await RequestX('crossbrowsertesting.com')
               .path('api/v3/livetests/browsers') 
               .params({'format': 'json'})
-              .isolate()
-              .start()
+              .doIsolateRequest()
               .fold((failures) => fail('ValueExpected'), (val) => print(val));
     
     await RequestX('crossbrowsertesting.com')
               .path('api/v3/livetests/browsers') 
               .params({'format': 'json'})
-              .isolate()
-              .start()
+              .doIsolateRequest()
+              .bindFuture((json) => decodeJsonInIsolate(json! as String, (e) => None()))
+              .fold<void, List>(
+                (failures) => null, 
+                  (val) => print (val[0]['api_name']));
+
+    await RequestX('crossbrowsertesting.com')
+              .path('api/v3/livetests/browsers') 
+              .params({'format': 'json'})
+              .useCache()
+              .doIsolateRequest()
+              .bindFuture((json) => decodeJsonInIsolate(json! as String, (e) => None()))
+              .fold<void, List>(
+                (failures) => null, 
+                  (val) => print (val[0]['api_name']));
+
+    await RequestX('crossbrowsertesting.com')
+              .path('api/v3/livetests/browsers') 
+              .params({'format': 'json'})
+              .useCache()
+              .doIsolateRequest()
               .bindFuture((json) => decodeJsonInIsolate(json! as String, (e) => None()))
               .fold<void, List>(
                 (failures) => null, 
@@ -27,8 +45,7 @@ void main() {
     await RequestX('dev-api.campusonline.website')
             .path('login')
             .jsonPost()
-            .isolate()
-            .start()
+            .doIsolateRequest()
             .fold((failures) => 
                     failures.first.fold(
                                         (err) => fail('expect exception'), 
@@ -48,8 +65,7 @@ void main() {
     await RequestX('dev-api.campusonline.website')
             .path('login')
             .jsonPost()
-            .isolate()
-            .start()
+            .doIsolateRequest()
             .fold((failures) => 
                     failures.first.fold(
                                         (err) => fail('expect exception'), 

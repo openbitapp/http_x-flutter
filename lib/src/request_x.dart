@@ -1,4 +1,6 @@
+import 'package:cache/cache.dart';
 import 'package:gl_functional/gl_functional.dart';
+import 'package:http_x/src/singleton_cache_manager.dart';
 import 'package:http_x/src/exceptions.dart';
 import 'package:http_x/src/request_methods.dart';
 import 'package:isolates/isolates.dart';
@@ -76,22 +78,40 @@ extension Decoders on String {
       => IsolateManager.prepare(this, isolateEntryPoint: _jsonEncode, customMessageToError: (e) => None()).start() as Future<Validation<T>>;
 }
 
-class RequestX<T> {
-  bool isHttps = true;
-  RequestMethod requestMethod = RequestMethod.get;
-  Duration timeout = const Duration(seconds:30);
-  final String authority;
-  String unencodedPath = '';
-  Map<String, String> requestHeaders = {};
-  Map<String, String> requestParams = {};
-  Map<String, dynamic> jsonBody = {};
+// typedef Request = Future<Validation<String>> Function();
 
-  RequestX (this.authority) {
-    _debugCheckAuthorityFormat(authority);
+// CacheService _cache = MemoryCache(); 
+// Future<Validation<String>> _getCacheOrDoRequest (Request request, String cacheId, Duration cacheDuration)
+// {
+//   return _cache.getBack<String>(cacheId: cacheId)
+//                   .fold(() =>
+//                               request()
+//                                   .fold((failures) => failures.first.toInvalid(), 
+//                                         (val) {
+//                                           _cache.add(object: val!, cacheId: cacheId, expireAfter: cacheDuration);
+//                                           return Valid(val as String);
+//                                         }), 
+//                         (some) => Valid(some).toFuture());
+// }
+
+class RequestX<T> {  
+  Duration _cacheDuration = Duration(seconds:30);
+  bool _useCache = false;
+  bool _isHttps = true;
+  RequestMethod _method = RequestMethod.get;
+  Duration _timeout = const Duration(seconds:30);
+  final String _authority;
+  String _unencodedPath = '';
+  final Map<String, String> _headers = {};
+  final Map<String, String> _params = {};
+  final Map<String, dynamic> _jsonBody = {};
+
+  RequestX (this._authority) {
+    _debugCheckAuthorityFormat(_authority);
   }
 
-  Uri getUri() => isHttps ? Uri.https(authority, unencodedPath, requestParams)
-                          : Uri.http(authority, unencodedPath, requestParams);
+  Uri getUri() => _isHttps ? Uri.https(_authority, _unencodedPath, _params)
+                          : Uri.http(_authority, _unencodedPath, _params);
   
    /// L'`assert` all'interno del metodo viene richiamato solo nel Debug, \
   /// per essere sicuri che l'autority sia corretta ossia non inizi con http e che non contenga /
@@ -132,95 +152,115 @@ class RequestX<T> {
                                       return None();
                                     }
                                   });
-  } 
+  }   
 }
 
 /// Extension che permette di costruire la richiesta con un linguaggio fluent
 extension Fluent on RequestX {
   RequestX isHttp () {
-    isHttps = false;
+    _isHttps = false;
     return this;
   }
 
   RequestX post () {
-    requestMethod = RequestMethod.post;
+    _method = RequestMethod.post;
     return this;
   }
 
   RequestX jsonPost () {
-    requestMethod = RequestMethod.post;
-    requestHeaders['Accept'] = 'application/json';
-    requestHeaders['Content-Type'] = 'application/json; charset=UTF-8';
+    _method = RequestMethod.post;
+    _headers['Accept'] = 'application/json';
+    _headers['Content-Type'] = 'application/json; charset=UTF-8';
     return this;
   }
 
   RequestX get () {
-    requestMethod = RequestMethod.get;
+    _method = RequestMethod.get;
     return this;
   }
 
   RequestX jsonGet () {
-    requestMethod = RequestMethod.get;
-    requestHeaders['Accept'] = 'application/json';
+    _method = RequestMethod.get;
+    _headers['Accept'] = 'application/json';
     return this;
   }
 
   RequestX path (String path) {
-    unencodedPath = path;
+    _unencodedPath = path;
     return this;
   }
 
   RequestX headers (Map<String, String> headers) {
-    requestHeaders.addAll(headers);
+    _headers.addAll(headers);
     return this;
   }
 
   RequestX params (Map<String, String> params) {
-    requestParams.addAll(params);
+    _params.addAll(params);
     return this;
   }
 
   RequestX body (Map<String, dynamic> body) {
-    jsonBody.addAll(body);
+    _jsonBody.addAll(body);
+    return this;
+  }
+
+  /// Usare per salvare il rilultato nella cache o riottenerlo alla prossiam chiamata.
+  /// L'id della cache è l'url di chiamata
+  RequestX useCache ({Duration duration = const Duration(seconds:30)}) {
+    _useCache = true;    
+    _cacheDuration = duration;
     return this;
   }
 
   /// La `doRequest`fa la chiamata senza isolate
-  /// Per eseguire la chiamata in un isolate, usare `isolate()` e successivamente chiamare
-  /// la `start()`
-  Future<Validation<String>> doRequest () async
+  /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`
+  Future<Validation<String>> doRequest ()
   {
     var uri = getUri();
-    var request = () => http.get (uri, headers: requestHeaders); 
-    if (requestMethod == RequestMethod.post) {
-      request = () => http.post(uri, headers: requestHeaders, body: json.encode(jsonBody));
+    var cacheId = uri.toString();
+    var request = () => http.get (uri, headers: _headers); 
+    if (_method == RequestMethod.post) {
+      request = () => http.post(uri, headers: _headers, body: json.encode(_jsonBody));
     }
+    var preparedRequest = () => request()
+                                  .timeout(_timeout)                      
+                                  .then((response) {
+                                    if (response.statusCode == 200) {
+                                      return Valid(utf8.decode(response.bodyBytes));
+                                    } else {
+                                      return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<String>();
+                                    }      
+                                  })
+                                  .catchError((e) {
+                                      if (e is Exception)
+                                      {
+                                        return e.toInvalid<String>();
+                                      } 
+                                      else if (e is Error)
+                                      {
+                                        return e.toInvalid<String>();
+                                      }
+                                  });
     
-    return await request()
-                      .timeout(timeout)                      
-                      .then((response) {
-                        if (response.statusCode == 200) {
-                          return Valid(utf8.decode(response.bodyBytes));
-                        } else {
-                          return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<String>();
-                        }      
-                      })
-                      .catchError((e) {
-                          if (e is Exception)
-                          {
-                            return e.toInvalid<String>();
-                          } 
-                          else if (e is Error)
-                          {
-                            return e.toInvalid<String>();
-                          }
-                      });
+    if (!_useCache)
+    {
+      return preparedRequest();
+    }
+
+    return SingletonHttpCacheManager().getCacheOrDoRequest(preparedRequest, cacheId, _cacheDuration);
   }
 
-  /// Prepara l'isolate. Chiamare la `start()` dopo questa chiamata
-  IsolateManager<Map<String, dynamic>, String> isolate ()
-  {
+  /// Esegue la richiesta in un isolate.
+  Future<Validation<String>> doIsolateRequest ()
+  {    
     var uri = getUri();
-    return RequestX._isolateRequest(uri: uri, requestMethod: requestMethod, headers: requestHeaders, timeout: timeout, jsonBody: jsonBody);
+    var cacheId = uri.toString();
+    var request = () => RequestX._isolateRequest(uri: uri, requestMethod: _method, headers: _headers, timeout: _timeout, jsonBody: _jsonBody).start();
+    if (!_useCache)
+    {
+      return request();
+    }
+    return SingletonHttpCacheManager().getCacheOrDoRequest(request, cacheId, _cacheDuration);
   }
 }
