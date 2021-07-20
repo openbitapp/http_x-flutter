@@ -1,5 +1,5 @@
-import 'package:cache/cache.dart';
 import 'package:gl_functional/gl_functional.dart';
+import 'package:http/http.dart';
 import 'package:http_x/src/singleton_cache_manager.dart';
 import 'package:http_x/src/exceptions.dart';
 import 'package:http_x/src/request_methods.dart';
@@ -26,18 +26,34 @@ String _getRequest (IsolateParameter<Map<String, dynamic>> requestParam) {
 
 /// Isolate entry point per la post
 String _postRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+  return _uploadContent(requestParam, http.post);
+}
+
+/// Isolate entry point per la put
+String _putRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+  return _uploadContent(requestParam, http.put);
+}
+
+/// Isolate entry point per la delete
+String _deleteRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+  return _uploadContent(requestParam, http.delete);
+}
+
+
+typedef _UploadRequest = Future<Response> Function(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding});
+
+String _uploadContent(IsolateParameter<Map<String, dynamic>> requestParam, _UploadRequest request) {  
   final uriOrUrl = requestParam.param['uriOrUrl'];
   final uri = _getUri(uriOrUrl);
-
-  http.post(uri, headers: requestParam.param['headers'], body: requestParam.param['jsonBody'])
-      .then((response) {
+  request(uri, headers: requestParam.param['headers'], body: requestParam.param['jsonBody'])
+    .then((response) {
         if (response.statusCode == 200) {
           requestParam.sendPort?.send(utf8.decode(response.bodyBytes));
         } else {
           throw BadResponseException(response.statusCode, responseMessage: response.body);
         }      
       });
-
+  
   return '';
 }
 
@@ -136,10 +152,24 @@ class RequestX<T> {
     }
 
     var entryPoint = _getRequest;
-    if (requestMethod == RequestMethod.post)
+
+    switch(requestMethod)
     {
-      entryPoint = _postRequest;
-    }
+      case RequestMethod.post:
+        entryPoint = _postRequest;
+      break;
+
+      case RequestMethod.put:
+        entryPoint = _putRequest;
+      break;
+
+      case RequestMethod.delete:
+        entryPoint = _deleteRequest;
+      break;
+
+      default: // Abbiamo già impostato sopra come default la get
+      break;
+    }    
 
     return IsolateManager.prepare(isolateParams, 
                                   isolateEntryPoint: entryPoint, 
@@ -169,6 +199,30 @@ extension Fluent on RequestX {
 
   RequestX jsonPost () {
     _method = RequestMethod.post;
+    _headers['Accept'] = 'application/json';
+    _headers['Content-Type'] = 'application/json; charset=UTF-8';
+    return this;
+  }
+
+  RequestX put () {
+    _method = RequestMethod.put;
+    return this;
+  }
+
+  RequestX jsonPut () {
+    _method = RequestMethod.put;
+    _headers['Accept'] = 'application/json';
+    _headers['Content-Type'] = 'application/json; charset=UTF-8';
+    return this;
+  }
+
+  RequestX delete () {
+    _method = RequestMethod.delete;
+    return this;
+  }
+
+  RequestX jsonDelete () {
+    _method = RequestMethod.delete;
     _headers['Accept'] = 'application/json';
     _headers['Content-Type'] = 'application/json; charset=UTF-8';
     return this;
@@ -214,15 +268,33 @@ extension Fluent on RequestX {
   }
 
   /// La `doRequest`fa la chiamata senza isolate
-  /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`
+  /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`._authoritySe è stata impostata la cache tramite `useCache` tenta di recuperare 
+  /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
+  /// l'url della chiamata. 
   Future<Validation<String>> doRequest ()
   {
     var uri = getUri();
     var cacheId = uri.toString();
     var request = () => http.get (uri, headers: _headers); 
-    if (_method == RequestMethod.post) {
-      request = () => http.post(uri, headers: _headers, body: json.encode(_jsonBody));
-    }
+
+    switch(_method)
+    {
+      case RequestMethod.post:
+        request = () => http.post(uri, headers: _headers, body: json.encode(_jsonBody));
+      break;
+
+      case RequestMethod.put:
+        request = () => http.put(uri, headers: _headers, body: json.encode(_jsonBody));
+      break;
+
+      case RequestMethod.delete:
+        request = () => http.delete(uri, headers: _headers, body: json.encode(_jsonBody));
+      break;
+
+      default: // Abbiamo già impostato sopra come default la get
+      break;
+    }    
+    
     var preparedRequest = () => request()
                                   .timeout(_timeout)                      
                                   .then((response) {
@@ -251,9 +323,11 @@ extension Fluent on RequestX {
     return SingletonHttpCacheManager().getCacheOrDoRequest(preparedRequest, cacheId, _cacheDuration);
   }
 
-  /// Esegue la richiesta in un isolate.
+  /// Esegue la richiesta in un isolate. Se è stata impostata la cache tramite `useCache` tenta di recuperare 
+  /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
+  /// l'url della chiamata. 
   Future<Validation<String>> doIsolateRequest ()
-  {    
+  {
     var uri = getUri();
     var cacheId = uri.toString();
     var request = () => RequestX._isolateRequest(uri: uri, requestMethod: _method, headers: _headers, timeout: _timeout, jsonBody: _jsonBody).start();
@@ -261,6 +335,7 @@ extension Fluent on RequestX {
     {
       return request();
     }
+    
     return SingletonHttpCacheManager().getCacheOrDoRequest(request, cacheId, _cacheDuration);
   }
 }

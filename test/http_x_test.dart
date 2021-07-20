@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:http_x/http_x.dart';
 import 'package:isolates/isolates.dart';
 import 'package:test/test.dart';
@@ -6,7 +8,7 @@ import 'package:gl_functional/gl_functional.dart';
 void main() {
   
 
-    test('First Test', () async {
+    test('Test Request X', () async {
       await RequestX('crossbrowsertesting.com')
               .path('api/v3/livetests/browsers') 
               .params({'format': 'json'})
@@ -83,4 +85,14 @@ void main() {
                 (val) => fail('expect exception'));              
     });
 
+    test('Test Connectivity: disable internet connection', () async {
+      await RequestX('crossbrowsertesting.com')
+              .path('api/v3/livetests/browsers') 
+              .params({'format': 'json'})
+              .doIsolateRequest()
+              .fold(
+                (failures) => expect(failures.first.isExceptionOfType(SocketException), true), 
+                (val) => fail('Socket Exception Expected'));
+    
+    });
 }

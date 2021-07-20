@@ -20,3 +20,12 @@ class BadResponseException implements IOException {
   @override
   String toString() => message;
 }
+
+class ConnectivityError extends Error {
+  final String message;
+
+  ConnectivityError (this.message);
+
+  @override
+  String toString() => message;
+}
