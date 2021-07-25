@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:gl_functional/gl_functional.dart';
 import 'package:http/http.dart';
 import 'package:http_x/src/singleton_cache_manager.dart';
@@ -111,6 +113,7 @@ extension Decoders on String {
 // }
 
 class RequestX<T> {  
+  bool _decodeResponseBodyBytes = false;
   Duration _cacheDuration = Duration(seconds:30);
   bool _useCache = false;
   bool _isHttps = true;
@@ -204,6 +207,11 @@ extension Fluent on RequestX {
     return this;
   }
 
+  RequestX decodeResponseBodyBytes () {
+    _decodeResponseBodyBytes = true;
+    return this;
+  }
+
   RequestX put () {
     _method = RequestMethod.put;
     return this;
@@ -236,6 +244,12 @@ extension Fluent on RequestX {
   RequestX jsonGet () {
     _method = RequestMethod.get;
     _headers['Accept'] = 'application/json';
+    return this;
+  }
+
+  RequestX bytesGet () {
+    _method = RequestMethod.get;
+    _headers['Content-Type'] = 'application/octet-stream';
     return this;
   }
 
@@ -299,7 +313,14 @@ extension Fluent on RequestX {
                                   .timeout(_timeout)                      
                                   .then((response) {
                                     if (response.statusCode == 200) {
-                                      return Valid(utf8.decode(response.bodyBytes));
+                                      if(_decodeResponseBodyBytes)
+                                      {
+                                        return Valid(utf8.decode(response.bodyBytes, allowMalformed: true));
+                                      }
+                                      else
+                                      {
+                                        return Valid(response.body);
+                                      }
                                     } else {
                                       return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<String>();
                                     }      
@@ -320,7 +341,42 @@ extension Fluent on RequestX {
       return preparedRequest();
     }
 
-    return SingletonHttpCacheManager().getCacheOrDoRequest(preparedRequest, cacheId, _cacheDuration);
+    return SingletonHttpCacheManager().getCacheOrDoRequest<String>(preparedRequest, cacheId, _cacheDuration);
+  }
+
+  Future<Validation<Uint8List>> doByteRequest ()
+  {
+    var uri = getUri();
+    var cacheId = uri.toString();
+    var request = () => http.get (uri, headers: _headers); 
+   
+    
+    var preparedRequest = () => request()
+                                  .timeout(_timeout)                      
+                                  .then((response) {
+                                    if (response.statusCode == 200) {                                      
+                                        return Valid(response.bodyBytes);                                      
+                                    } else {
+                                      return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<Uint8List>();
+                                    }      
+                                  })
+                                  .catchError((e) {
+                                      if (e is Exception)
+                                      {
+                                        return e.toInvalid<Uint8List>();
+                                      } 
+                                      else if (e is Error)
+                                      {
+                                        return e.toInvalid<Uint8List>();
+                                      }
+                                  });
+    
+    if (!_useCache)
+    {
+      return preparedRequest();
+    }
+
+    return SingletonHttpCacheManager().getCacheOrDoRequest<Uint8List>(preparedRequest, cacheId, _cacheDuration);
   }
 
   /// Esegue la richiesta in un isolate. Se è stata impostata la cache tramite `useCache` tenta di recuperare 
@@ -336,6 +392,6 @@ extension Fluent on RequestX {
       return request();
     }
     
-    return SingletonHttpCacheManager().getCacheOrDoRequest(request, cacheId, _cacheDuration);
+    return SingletonHttpCacheManager().getCacheOrDoRequest<String>(request, cacheId, _cacheDuration);
   }
 }

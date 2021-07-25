@@ -1,8 +1,6 @@
 import 'package:cache/cache.dart';
 import 'package:gl_functional/gl_functional.dart';
 
-typedef Request = Future<Validation<String>> Function();
-
 class SingletonHttpCacheManager {
   static final SingletonHttpCacheManager _singleton = SingletonHttpCacheManager._internal();
 
@@ -18,15 +16,15 @@ class SingletonHttpCacheManager {
   /// Se non viene usata, la cache di default sarà di tipo `MemoryCache`  
   static void Init(CacheService cache) => SingletonHttpCacheManager ()._cache = cache;
 
-  Future<Validation<String>> getCacheOrDoRequest (Request request, String cacheId, Duration cacheDuration)
+  Future<Validation<T>> getCacheOrDoRequest<T> (Future<Validation<T>> Function() request, String cacheId, Duration cacheDuration)
   {
-    return _cache.getBack<String>(cacheId: cacheId)
+    return _cache.getBack<T>(cacheId: cacheId)
                     .fold(() =>
                                 request()
                                     .fold((failures) => failures.first.toInvalid(), 
                                           (val) {
                                             _cache.add(object: val!, cacheId: cacheId, expireAfter: cacheDuration);
-                                            return Valid(val as String);
+                                            return Valid(val as T);
                                           }), 
                           (some) => Valid(some).toFuture());
   }
