@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:gl_functional/gl_functional.dart';
 import 'package:http/http.dart';
 import 'package:http_x/src/singleton_cache_manager.dart';
@@ -10,41 +8,48 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 /// Isolate entry point per la get
-String _getRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+void _getRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
   final uriOrUrl = requestParam.param['uriOrUrl'];
   final uri = _getUri(uriOrUrl);
+  final bool getResponseBytes = requestParam.param['getResponseBytes'];
 
   http.get (uri, headers: requestParam.param['headers'])
       .then((response) {
         if (response.statusCode == 200) {
-          requestParam.sendPort?.send(utf8.decode(response.bodyBytes));
+          if(getResponseBytes)
+          {
+            requestParam.sendPort?.send(response.bodyBytes);
+          }
+          else {
+            // Usiamo la utf8.decode perché in alcuni casi diceva che il body della response era malformed (Che aria è)
+            // Forse adesso è risolto ma non si sa mai
+            requestParam.sendPort?.send(utf8.decode(response.bodyBytes)); 
+          }
         } else {
           throw BadResponseException(response.statusCode, responseMessage: response.body);
         }      
       });
-
-  return '';
 }
 
 /// Isolate entry point per la post
-String _postRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
-  return _uploadContent(requestParam, http.post);
+void _postRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+  _uploadContent(requestParam, http.post);
 }
 
 /// Isolate entry point per la put
-String _putRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
-  return _uploadContent(requestParam, http.put);
+void _putRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+   _uploadContent(requestParam, http.put);
 }
 
 /// Isolate entry point per la delete
-String _deleteRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
-  return _uploadContent(requestParam, http.delete);
+void _deleteRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+  _uploadContent(requestParam, http.delete);
 }
 
 
 typedef _UploadRequest = Future<Response> Function(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding});
 
-String _uploadContent(IsolateParameter<Map<String, dynamic>> requestParam, _UploadRequest request) {  
+void _uploadContent(IsolateParameter<Map<String, dynamic>> requestParam, _UploadRequest request) {  
   final uriOrUrl = requestParam.param['uriOrUrl'];
   final uri = _getUri(uriOrUrl);
   request(uri, headers: requestParam.param['headers'], body: requestParam.param['jsonBody'])
@@ -55,8 +60,6 @@ String _uploadContent(IsolateParameter<Map<String, dynamic>> requestParam, _Uplo
           throw BadResponseException(response.statusCode, responseMessage: response.body);
         }      
       });
-  
-  return '';
 }
 
 Uri _getUri(dynamic uriOrUrl)
@@ -112,8 +115,9 @@ extension Decoders on String {
 //                         (some) => Valid(some).toFuture());
 // }
 
-class RequestX<T> {  
+class RequestX {  
   bool _decodeResponseBodyBytes = false;
+  bool _getResponseBytes = false;
   Duration _cacheDuration = Duration(seconds:30);
   bool _useCache = false;
   bool _isHttps = true;
@@ -142,8 +146,9 @@ class RequestX<T> {
   /// È la funzione che lancia l'isolate per cui deve essere statico e non avere riferimenti a altre classi.
   /// Per questo non passiamo un parametro di tipo `RequestX` ma i vari valori
   /// È privata perché si forza l'uso del metodo `isolate()` dell'extension
-  static IsolateManager<Map<String, dynamic>, String> _isolateRequest ({required Uri uri, 
+  static IsolateManager<Map<String, dynamic>> _isolateRequest ({required Uri uri, 
                                                                       RequestMethod requestMethod = RequestMethod.get,
+                                                                      bool getResponseBytes = false,
                                                                       Map<String, String> headers = const {}, 
                                                                       Map<String, dynamic> jsonBody = const {}, 
                                                                       Duration timeout = const Duration(seconds:30)})
@@ -153,6 +158,8 @@ class RequestX<T> {
     {
       isolateParams['jsonBody'] = json.encode(jsonBody);
     }
+
+    isolateParams['getResponseBytes'] = getResponseBytes;
 
     var entryPoint = _getRequest;
 
@@ -247,9 +254,8 @@ extension Fluent on RequestX {
     return this;
   }
 
-  RequestX bytesGet () {
-    _method = RequestMethod.get;
-    _headers['Content-Type'] = 'application/octet-stream';
+  RequestX getResponseBytes () {
+    _getResponseBytes = true;
     return this;
   }
 
@@ -285,7 +291,7 @@ extension Fluent on RequestX {
   /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`._authoritySe è stata impostata la cache tramite `useCache` tenta di recuperare 
   /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
   /// l'url della chiamata. 
-  Future<Validation<String>> doRequest ()
+  Future<Validation<T>> doRequest<T> ()
   {
     var uri = getUri();
     var cacheId = uri.toString();
@@ -313,26 +319,33 @@ extension Fluent on RequestX {
                                   .timeout(_timeout)                      
                                   .then((response) {
                                     if (response.statusCode == 200) {
-                                      if(_decodeResponseBodyBytes)
+                                      if(_getResponseBytes)
                                       {
-                                        return Valid(utf8.decode(response.bodyBytes, allowMalformed: true));
+                                        return Valid(response.bodyBytes as T);
+                                      }
+                                      // Usiamo la utf8.decode perché in alcuni casi diceva che il body della response era malformed (Che aria è)
+                                      // Forse adesso è risolto ma non si sa mai. 
+                                      // Se senza il decode dà un malformed, chiamare il metodo decodeResponseBodyBytes sulla RequestX
+                                      else if(_decodeResponseBodyBytes)
+                                      {
+                                        return Valid(utf8.decode(response.bodyBytes, allowMalformed: true) as T);
                                       }
                                       else
                                       {
-                                        return Valid(response.body);
-                                      }
+                                        return Valid(response.body as T);
+                                      }                                      
                                     } else {
-                                      return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<String>();
+                                      return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<T>();
                                     }      
                                   })
                                   .catchError((e) {
                                       if (e is Exception)
                                       {
-                                        return e.toInvalid<String>();
+                                        return e.toInvalid<T>();
                                       } 
                                       else if (e is Error)
                                       {
-                                        return e.toInvalid<String>();
+                                        return e.toInvalid<T>();
                                       }
                                   });
     
@@ -341,57 +354,22 @@ extension Fluent on RequestX {
       return preparedRequest();
     }
 
-    return SingletonHttpCacheManager().getCacheOrDoRequest<String>(preparedRequest, cacheId, _cacheDuration);
-  }
-
-  Future<Validation<Uint8List>> doByteRequest ()
-  {
-    var uri = getUri();
-    var cacheId = uri.toString();
-    var request = () => http.get (uri, headers: _headers); 
-   
-    
-    var preparedRequest = () => request()
-                                  .timeout(_timeout)                      
-                                  .then((response) {
-                                    if (response.statusCode == 200) {                                      
-                                        return Valid(response.bodyBytes);                                      
-                                    } else {
-                                      return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<Uint8List>();
-                                    }      
-                                  })
-                                  .catchError((e) {
-                                      if (e is Exception)
-                                      {
-                                        return e.toInvalid<Uint8List>();
-                                      } 
-                                      else if (e is Error)
-                                      {
-                                        return e.toInvalid<Uint8List>();
-                                      }
-                                  });
-    
-    if (!_useCache)
-    {
-      return preparedRequest();
-    }
-
-    return SingletonHttpCacheManager().getCacheOrDoRequest<Uint8List>(preparedRequest, cacheId, _cacheDuration);
+    return SingletonHttpCacheManager().getCacheOrDoRequest<T>(preparedRequest, cacheId, _cacheDuration);
   }
 
   /// Esegue la richiesta in un isolate. Se è stata impostata la cache tramite `useCache` tenta di recuperare 
   /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
   /// l'url della chiamata. 
-  Future<Validation<String>> doIsolateRequest ()
+  Future<Validation> doIsolateRequest ()
   {
     var uri = getUri();
     var cacheId = uri.toString();
-    var request = () => RequestX._isolateRequest(uri: uri, requestMethod: _method, headers: _headers, timeout: _timeout, jsonBody: _jsonBody).start();
+    var request = () => RequestX._isolateRequest(uri: uri, getResponseBytes: _getResponseBytes,  requestMethod: _method, headers: _headers, timeout: _timeout, jsonBody: _jsonBody).start();
     if (!_useCache)
     {
       return request();
     }
     
-    return SingletonHttpCacheManager().getCacheOrDoRequest<String>(request, cacheId, _cacheDuration);
+    return SingletonHttpCacheManager().getCacheOrDoRequest(request, cacheId, _cacheDuration);
   }
 }
