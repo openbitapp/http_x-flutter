@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:http_x/http_x.dart';
 import 'package:isolates/isolates.dart';
 import 'package:test/test.dart';
-import 'package:gl_functional/gl_functional.dart';
+import 'package:functional_dart/functional_dart.dart';
 
 void main() {
   

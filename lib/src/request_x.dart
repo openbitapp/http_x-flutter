@@ -1,4 +1,4 @@
-import 'package:gl_functional/gl_functional.dart';
+import 'package:functional_dart/functional_dart.dart';
 import 'package:http/http.dart';
 import 'package:http_x/src/singleton_cache_manager.dart';
 import 'package:http_x/src/exceptions.dart';
