@@ -124,17 +124,25 @@ class RequestX {
   RequestMethod _method = RequestMethod.get;
   Duration _timeout = const Duration(seconds:30);
   final String _authority;
+  final String _url;
   String _unencodedPath = '';
+  
   final Map<String, String> _headers = {};
   final Map<String, String> _params = {};
   final Map<String, dynamic> _jsonBody = {};
 
-  RequestX (this._authority) {
+  RequestX (this._authority) : _url = ''
+  {
     _debugCheckAuthorityFormat(_authority);
   }
 
-  Uri getUri() => _isHttps ? Uri.https(_authority, _unencodedPath, _params)
-                          : Uri.http(_authority, _unencodedPath, _params);
+  RequestX.fromUrl (this._url) : _authority = '';
+
+  Uri getUri() => _url.isEmpty 
+                        ? _isHttps 
+                            ? Uri.https(_authority, _unencodedPath, _params)
+                            : Uri.http(_authority, _unencodedPath, _params)
+                        : Uri.parse (_url);
   
    /// L'`assert` all'interno del metodo viene richiamato solo nel Debug, \
   /// per essere sicuri che l'autority sia corretta ossia non inizi con http e che non contenga /
