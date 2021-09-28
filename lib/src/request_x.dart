@@ -15,7 +15,7 @@ void _getRequest (IsolateParameter<Map<String, dynamic>> requestParam) {
 
   http.get (uri, headers: requestParam.param['headers'])
       .then((response) {
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
           if(getResponseBytes)
           {
             requestParam.sendPort?.send(response.bodyBytes);
@@ -54,7 +54,7 @@ void _uploadContent(IsolateParameter<Map<String, dynamic>> requestParam, _Upload
   final uri = _getUri(uriOrUrl);
   request(uri, headers: requestParam.param['headers'], body: requestParam.param['jsonBody'])
     .then((response) {
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
           requestParam.sendPort?.send(utf8.decode(response.bodyBytes));
         } else {
           throw BadResponseException(response.statusCode, responseMessage: response.body);
@@ -326,7 +326,7 @@ extension Fluent on RequestX {
     var preparedRequest = () => request()
                                   .timeout(_timeout)                      
                                   .then((response) {
-                                    if (response.statusCode == 200) {
+                                    if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
                                       if(_getResponseBytes)
                                       {
                                         return Valid(response.bodyBytes as T);
