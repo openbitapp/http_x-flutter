@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:http_x/http_x.dart';
-import 'package:isolates/isolates.dart';
+import 'package:bitapp_http_x/bitapp_http_x.dart';
+import 'package:bitapp_isolates/bitapp_isolates.dart';
 import 'package:test/test.dart';
-import 'package:functional_dart/functional_dart.dart';
+import 'package:bitapp_functional_dart/bitapp_functional_dart.dart';
 
 void main() {
   

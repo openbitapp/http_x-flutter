@@ -1,9 +1,9 @@
-import 'package:functional_dart/functional_dart.dart';
+import 'package:bitapp_functional_dart/bitapp_functional_dart.dart';
 import 'package:http/http.dart';
-import 'package:http_x/src/singleton_cache_manager.dart';
-import 'package:http_x/src/exceptions.dart';
-import 'package:http_x/src/request_methods.dart';
-import 'package:isolates/isolates.dart';
+import 'package:bitapp_http_x/src/singleton_cache_manager.dart';
+import 'package:bitapp_http_x/src/exceptions.dart';
+import 'package:bitapp_http_x/src/request_methods.dart';
+import 'package:bitapp_isolates/bitapp_isolates.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 

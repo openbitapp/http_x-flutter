@@ -1,5 +1,5 @@
-import 'package:cache/cache.dart';
-import 'package:functional_dart/functional_dart.dart';
+import 'package:bitapp_cache/bitapp_cache.dart';
+import 'package:bitapp_functional_dart/bitapp_functional_dart.dart';
 
 class SingletonHttpCacheManager {
   static final SingletonHttpCacheManager _singleton = SingletonHttpCacheManager._internal();
