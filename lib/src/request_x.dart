@@ -46,6 +46,10 @@ void _deleteRequest (IsolateParameter<Map<String, dynamic>> requestParam) {
   _uploadContent(requestParam, http.delete);
 }
 
+void _patchRequest (IsolateParameter<Map<String, dynamic>> requestParam) {
+  _uploadContent(requestParam, http.patch);
+}
+
 
 typedef _UploadRequest = Future<Response> Function(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding});
 
@@ -185,6 +189,10 @@ class RequestX {
         entryPoint = _deleteRequest;
       break;
 
+      case RequestMethod.patch:
+        entryPoint = _patchRequest;
+        break;
+
       default: // Abbiamo già impostato sopra come default la get
       break;
     }    
@@ -200,7 +208,9 @@ class RequestX {
                                       return None();
                                     }
                                   });
-  }   
+  }
+
+  static void clearCache() => SingletonHttpCacheManager().clearCache();
 }
 
 /// Extension che permette di costruire la richiesta con un linguaggio fluent
@@ -234,6 +244,13 @@ extension Fluent on RequestX {
 
   RequestX jsonPut () {
     _method = RequestMethod.put;
+    _headers['Accept'] = 'application/json';
+    _headers['Content-Type'] = 'application/json; charset=UTF-8';
+    return this;
+  }
+
+  RequestX jsonPatch () {
+    _method = RequestMethod.patch;
     _headers['Accept'] = 'application/json';
     _headers['Content-Type'] = 'application/json; charset=UTF-8';
     return this;
@@ -318,6 +335,10 @@ extension Fluent on RequestX {
       case RequestMethod.delete:
         request = () => http.delete(uri, headers: _headers, body: json.encode(_jsonBody));
       break;
+
+      case RequestMethod.patch:
+        request = () => http.patch(uri, headers: _headers, body: json.encode(_jsonBody));
+        break;
 
       default: // Abbiamo già impostato sopra come default la get
       break;

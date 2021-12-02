@@ -3,5 +3,6 @@ enum RequestMethod {
   post,
   put,
   delete,
+  patch,
   head
 }
