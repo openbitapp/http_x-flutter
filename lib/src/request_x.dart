@@ -322,6 +322,9 @@ extension Fluent on RequestX {
     var cacheId = uri.toString();
     var request = () => http.get (uri, headers: _headers); 
 
+    // La mettiamo di default a false perché si usa (qualora impostata) solo nella get
+    // Nelgli altri tipi di chiamata anche se è stata impostata a tru, si ignora la cache
+    var useCache = false;
     switch(_method)
     {
       case RequestMethod.post:
@@ -341,6 +344,7 @@ extension Fluent on RequestX {
         break;
 
       default: // Abbiamo già impostato sopra come default la get
+      useCache = _useCache;
       break;
     }    
     
@@ -378,7 +382,7 @@ extension Fluent on RequestX {
                                       }
                                   });
     
-    if (!_useCache)
+    if (!useCache)
     {
       return preparedRequest();
     }
