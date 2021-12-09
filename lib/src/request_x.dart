@@ -406,7 +406,7 @@ extension Fluent on RequestX {
                       ? _useCache
                       : false;
 
-    if (!_useCache)
+    if (!useCache)
     {
       return request();
     }
