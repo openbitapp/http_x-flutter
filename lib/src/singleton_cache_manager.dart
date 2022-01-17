@@ -1,5 +1,6 @@
 import 'package:bitapp_cache/bitapp_cache.dart';
 import 'package:bitapp_functional_dart/bitapp_functional_dart.dart';
+import 'package:logger/logger.dart';
 
 class SingletonHttpCacheManager {
   static final SingletonHttpCacheManager _singleton = SingletonHttpCacheManager._internal();
@@ -26,7 +27,11 @@ class SingletonHttpCacheManager {
                                             _cache.add(object: val!, cacheId: cacheId, expireAfter: cacheDuration);
                                             return Valid(val as T);
                                           }), 
-                          (some) => Valid(some).toFuture());
+                          (some) {
+                            final logger = Logger();
+                            logger.i('Cached data returned for $cacheId');
+                            return Valid(some).toFuture();
+                          });
   }
 
   void clearCache() => cache.clear();

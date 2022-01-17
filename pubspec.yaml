@@ -1,6 +1,6 @@
 name: bitapp_http_x
 description: A starting point for Dart libraries or applications.
-version: 1.0.5
+version: 1.0.6
 repository: https://github.com/openbitapp/http_x-flutter
 
 environment:
@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   webfeed: ^0.7.0
   http: ^0.13.3
-  
+  logger: ^1.1.0
   bitapp_functional_dart: ^1.0.0
   bitapp_isolates: ^1.0.0
   bitapp_cache: ^1.0.0

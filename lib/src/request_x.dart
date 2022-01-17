@@ -6,6 +6,7 @@ import 'package:bitapp_http_x/src/request_methods.dart';
 import 'package:bitapp_isolates/bitapp_isolates.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:logger/logger.dart';
 
 /// Isolate entry point per la get
 void _getRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
@@ -312,6 +313,19 @@ extension Fluent on RequestX {
     return this;
   }
 
+  void _printLog(bool useCache) {
+    final logMap = <String, dynamic>{
+      "title": "Request log",
+      "url": getUri().toString(),
+      "headers": _headers,
+      "body": _jsonBody,
+      "ask for cached data": useCache
+    };
+
+    final logger = Logger();
+    logger.i(logMap);
+  }
+
   /// La `doRequest`fa la chiamata senza isolate
   /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`._authoritySe è stata impostata la cache tramite `useCache` tenta di recuperare 
   /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
@@ -383,7 +397,9 @@ extension Fluent on RequestX {
                                         return e.toInvalid<T>();
                                       }
                                   });
-    
+
+    _printLog(useCache);
+
     if (!useCache)
     {
       return preparedRequest();
@@ -405,6 +421,8 @@ extension Fluent on RequestX {
     var useCache = _method == RequestMethod.get
                       ? _useCache
                       : false;
+
+    _printLog(useCache);
 
     if (!useCache)
     {
