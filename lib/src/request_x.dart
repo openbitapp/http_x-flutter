@@ -125,6 +125,7 @@ class RequestX {
   bool _getResponseBytes = false;
   Duration _cacheDuration = Duration(seconds:30);
   bool _useCache = false;
+  bool _enableLog = false;
   bool _isHttps = true;
   RequestMethod _method = RequestMethod.get;
   Duration _timeout = const Duration(seconds:30);
@@ -313,7 +314,16 @@ extension Fluent on RequestX {
     return this;
   }
 
+  RequestX enableLog(bool enable) {
+    _enableLog = enable;
+    return this;
+  }
+
   void _printLog(bool useCache) {
+    if(!_enableLog) {
+      return;
+    }
+
     final logMap = <String, dynamic>{
       "title": "Request log",
       "url": getUri().toString(),
