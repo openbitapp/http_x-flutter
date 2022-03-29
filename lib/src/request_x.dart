@@ -134,7 +134,7 @@ class RequestX {
   String _unencodedPath = '';
   
   final Map<String, String> _headers = {};
-  final Map<String, String> _params = {};
+  final Map<String, dynamic> _params = {};
   final Map<String, dynamic> _jsonBody = {};
 
   RequestX (this._authority) : _url = ''
@@ -296,7 +296,7 @@ extension Fluent on RequestX {
     return this;
   }
 
-  RequestX params (Map<String, String> params) {
+  RequestX params (Map<String, dynamic> params) {
     _params.addAll(params);
     return this;
   }
