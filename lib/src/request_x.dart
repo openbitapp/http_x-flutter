@@ -1,4 +1,6 @@
 import 'package:bitapp_functional_dart/bitapp_functional_dart.dart';
+import 'package:bitapp_http_x/src/custom_http.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 import 'package:bitapp_http_x/src/singleton_cache_manager.dart';
 import 'package:bitapp_http_x/src/exceptions.dart';
@@ -9,62 +11,62 @@ import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 
 /// Isolate entry point per la get
-void _getRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
+void _getRequest (bool trustBadCertificates, IsolateParameter<Map<String, dynamic>> requestParam) {
   final uriOrUrl = requestParam.param['uriOrUrl'];
   final uri = _getUri(uriOrUrl);
   final bool getResponseBytes = requestParam.param['getResponseBytes'];
 
-  http.get (uri, headers: requestParam.param['headers'])
+  custom_get(uri, trustBadCertificates: trustBadCertificates, headers: requestParam.param['headers'])
       .then((response) {
-        if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
-          if(getResponseBytes)
-          {
-            requestParam.sendPort?.send(response.bodyBytes);
-          }
-          else {
-            // Usiamo la utf8.decode perché in alcuni casi diceva che il body della response era malformed (Che aria è)
-            // Forse adesso è risolto ma non si sa mai
-            requestParam.sendPort?.send(utf8.decode(response.bodyBytes)); 
-          }
-        } else {
-          throw BadResponseException(response.statusCode, responseMessage: response.body);
-        }      
-      });
+    if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
+      if(getResponseBytes)
+      {
+        requestParam.sendPort?.send(response.bodyBytes);
+      }
+      else {
+        // Usiamo la utf8.decode perché in alcuni casi diceva che il body della response era malformed (Che aria è)
+        // Forse adesso è risolto ma non si sa mai
+        requestParam.sendPort?.send(utf8.decode(response.bodyBytes));
+      }
+    } else {
+      throw BadResponseException(response.statusCode, responseMessage: response.body);
+    }
+  });
 }
 
 /// Isolate entry point per la post
-void _postRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
-  _uploadContent(requestParam, http.post);
+void _postRequest (bool trustBadCertificates, IsolateParameter<Map<String, dynamic>> requestParam) {
+  _uploadContent(trustBadCertificates, requestParam, custom_post);
 }
 
 /// Isolate entry point per la put
-void _putRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
-   _uploadContent(requestParam, http.put);
+void _putRequest (bool trustBadCertificates, IsolateParameter<Map<String, dynamic>> requestParam) {
+  _uploadContent(trustBadCertificates, requestParam, custom_put);
 }
 
 /// Isolate entry point per la delete
-void _deleteRequest (IsolateParameter<Map<String, dynamic>> requestParam) {  
-  _uploadContent(requestParam, http.delete);
+void _deleteRequest (bool trustBadCertificates, IsolateParameter<Map<String, dynamic>> requestParam) {
+  _uploadContent(trustBadCertificates, requestParam, custom_delete);
 }
 
-void _patchRequest (IsolateParameter<Map<String, dynamic>> requestParam) {
-  _uploadContent(requestParam, http.patch);
+void _patchRequest (bool trustBadCertificates, IsolateParameter<Map<String, dynamic>> requestParam) {
+  _uploadContent(trustBadCertificates, requestParam, custom_patch);
 }
 
 
-typedef _UploadRequest = Future<Response> Function(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding});
+typedef _UploadRequest = Future<http.Response> Function(Uri url, {Map<String, String>? headers, Object? body, Encoding? encoding, bool trustBadCertificates});
 
-void _uploadContent(IsolateParameter<Map<String, dynamic>> requestParam, _UploadRequest request) {  
+void _uploadContent(bool trustBadCertificates, IsolateParameter<Map<String, dynamic>> requestParam, _UploadRequest request) {
   final uriOrUrl = requestParam.param['uriOrUrl'];
   final uri = _getUri(uriOrUrl);
-  request(uri, headers: requestParam.param['headers'], body: requestParam.param['jsonBody'])
-    .then((response) {
-        if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
-          requestParam.sendPort?.send(utf8.decode(response.bodyBytes));
-        } else {
-          throw BadResponseException(response.statusCode, responseMessage: response.body);
-        }      
-      });
+  request(uri, headers: requestParam.param['headers'], body: requestParam.param['jsonBody'], trustBadCertificates: trustBadCertificates)
+      .then((response) {
+    if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
+      requestParam.sendPort?.send(utf8.decode(response.bodyBytes));
+    } else {
+      throw BadResponseException(response.statusCode, responseMessage: response.body);
+    }
+  });
 }
 
 Uri _getUri(dynamic uriOrUrl)
@@ -77,7 +79,7 @@ Uri _getUri(dynamic uriOrUrl)
   else {
     uri = uriOrUrl as Uri;
   }
-  
+
   return uri;
 }
 
@@ -97,11 +99,11 @@ dynamic _jsonEncode(IsolateParameter<String> jsonToEncode)
 
 
 extension Decoders on String {
-  Future<Validation<T>> toJsonIsolate<T> () 
-      => IsolateManager.prepare(this, isolateEntryPoint: _jsonDecode, customMessageToError: (e) => None()).start() as Future<Validation<T>>;
+  Future<Validation<T>> toJsonIsolate<T> ()
+  => IsolateManager.prepare(this, isolateEntryPoint: _jsonDecode, customMessageToError: (e) => None()).start() as Future<Validation<T>>;
 
-  Future<Validation<T>> decodeJsonInIsolate<T> () 
-      => IsolateManager.prepare(this, isolateEntryPoint: _jsonEncode, customMessageToError: (e) => None()).start() as Future<Validation<T>>;
+  Future<Validation<T>> decodeJsonInIsolate<T> ()
+  => IsolateManager.prepare(this, isolateEntryPoint: _jsonEncode, customMessageToError: (e) => None()).start() as Future<Validation<T>>;
 }
 
 // typedef Request = Future<Validation<String>> Function();
@@ -126,6 +128,7 @@ class RequestX {
   Duration _cacheDuration = Duration(seconds:30);
   bool _useCache = false;
   bool _enableLog = false;
+  bool _trustBadCertificatesInDebug = false;
   bool _isHttps = true;
   RequestMethod _method = RequestMethod.get;
   Duration _timeout = const Duration(seconds:30);
@@ -160,44 +163,45 @@ class RequestX {
   /// È la funzione che lancia l'isolate per cui deve essere statico e non avere riferimenti a altre classi.
   /// Per questo non passiamo un parametro di tipo `RequestX` ma i vari valori
   /// È privata perché si forza l'uso del metodo `isolate()` dell'extension
-  static IsolateManager<Map<String, dynamic>> _isolateRequest ({required Uri uri, 
-                                                                      RequestMethod requestMethod = RequestMethod.get,
-                                                                      bool getResponseBytes = false,
-                                                                      Map<String, String> headers = const {}, 
-                                                                      Map<String, dynamic> jsonBody = const {}, 
-                                                                      Duration timeout = const Duration(seconds:30)})
+  static IsolateManager<Map<String, dynamic>> _isolateRequest ({required Uri uri,
+    RequestMethod requestMethod = RequestMethod.get,
+    bool getResponseBytes = false,
+    Map<String, String> headers = const {},
+    Map<String, dynamic> jsonBody = const {},
+    Duration timeout = const Duration(seconds:30),
+    bool trustBadCertificatesInDebug = false})
   {
     var isolateParams = {'uriOrUrl': uri, 'headers': headers};
-    if (jsonBody.isNotEmpty)    
+    if (jsonBody.isNotEmpty)
     {
       isolateParams['jsonBody'] = json.encode(jsonBody);
     }
 
     isolateParams['getResponseBytes'] = getResponseBytes;
 
-    var entryPoint = _getRequest;
+    var entryPoint = (IsolateParameter<Map<String, dynamic>> param) => _getRequest(trustBadCertificatesInDebug, param);
 
     switch(requestMethod)
     {
       case RequestMethod.post:
-        entryPoint = _postRequest;
-      break;
+        entryPoint = (IsolateParameter<Map<String, dynamic>> param) => _postRequest(trustBadCertificatesInDebug, param);
+        break;
 
       case RequestMethod.put:
-        entryPoint = _putRequest;
-      break;
+        entryPoint = (IsolateParameter<Map<String, dynamic>> param) => _putRequest(trustBadCertificatesInDebug, param);
+        break;
 
       case RequestMethod.delete:
-        entryPoint = _deleteRequest;
-      break;
+        entryPoint = entryPoint = (IsolateParameter<Map<String, dynamic>> param) => _deleteRequest(trustBadCertificatesInDebug, param);
+        break;
 
       case RequestMethod.patch:
-        entryPoint = _patchRequest;
+        entryPoint = entryPoint = entryPoint = (IsolateParameter<Map<String, dynamic>> param) => _patchRequest(trustBadCertificatesInDebug, param);
         break;
 
       default: // Abbiamo già impostato sopra come default la get
-      break;
-    }    
+        break;
+    }
 
     return IsolateManager.prepare(isolateParams, 
                                   isolateEntryPoint: entryPoint, 
@@ -336,6 +340,11 @@ extension Fluent on RequestX {
     logger.i(logMap);
   }
 
+  RequestX trustBadCertificatesInDebug (bool trust) {
+    _trustBadCertificatesInDebug = kDebugMode && trust;
+    return this;
+  }
+
   /// La `doRequest`fa la chiamata senza isolate
   /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`._authoritySe è stata impostata la cache tramite `useCache` tenta di recuperare 
   /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
@@ -344,7 +353,7 @@ extension Fluent on RequestX {
   {
     var uri = getUri();
     var cacheId = uri.toString();
-    var request = () => http.get (uri, headers: _headers); 
+    var request = () => custom_get(uri, headers: _headers, trustBadCertificates: _trustBadCertificatesInDebug);
 
     // La useCache sarà il valore impostato se è una get, false in tutti gli altri casi
     var useCache = _method == RequestMethod.get
@@ -355,25 +364,25 @@ extension Fluent on RequestX {
     switch(_method)
     {
       case RequestMethod.post:
-        request = () => http.post(uri, headers: _headers, body: json.encode(_jsonBody));
-      break;
+        request = () => custom_post(uri, headers: _headers, body: json.encode(_jsonBody), trustBadCertificates: _trustBadCertificatesInDebug);
+        break;
 
       case RequestMethod.put:
-        request = () => http.put(uri, headers: _headers, body: json.encode(_jsonBody));
-      break;
+        request = () => custom_put(uri, headers: _headers, body: json.encode(_jsonBody), trustBadCertificates: _trustBadCertificatesInDebug);
+        break;
 
       case RequestMethod.delete:
-        request = () => http.delete(uri, headers: _headers, body: json.encode(_jsonBody));
-      break;
+        request = () => custom_delete(uri, headers: _headers, body: json.encode(_jsonBody), trustBadCertificates: _trustBadCertificatesInDebug);
+        break;
 
       case RequestMethod.patch:
-        request = () => http.patch(uri, headers: _headers, body: json.encode(_jsonBody));
+        request = () => custom_patch(uri, headers: _headers, body: json.encode(_jsonBody), trustBadCertificates: _trustBadCertificatesInDebug);
         break;
 
       default: // Abbiamo già impostato sopra come default la get
-      break;
-    }    
-    
+        break;
+    }
+
     var preparedRequest = () => request()
                                   .timeout(_timeout)                      
                                   .then((response) {
