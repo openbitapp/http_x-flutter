@@ -1,7 +1,6 @@
 import 'package:bitapp_functional_dart/bitapp_functional_dart.dart';
 import 'package:bitapp_http_x/src/custom_http.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart';
 import 'package:bitapp_http_x/src/singleton_cache_manager.dart';
 import 'package:bitapp_http_x/src/exceptions.dart';
 import 'package:bitapp_http_x/src/request_methods.dart';
@@ -83,7 +82,7 @@ Uri _getUri(dynamic uriOrUrl)
   return uri;
 }
 
-/// Isolate entry point per la decode del json 
+/// Isolate entry point per la decode del json
 dynamic _jsonDecode(IsolateParameter<String> responseStringParam)
 {
   final jsonRes = json.decode(responseStringParam.param);
@@ -108,21 +107,21 @@ extension Decoders on String {
 
 // typedef Request = Future<Validation<String>> Function();
 
-// CacheService _cache = MemoryCache(); 
+// CacheService _cache = MemoryCache();
 // Future<Validation<String>> _getCacheOrDoRequest (Request request, String cacheId, Duration cacheDuration)
 // {
 //   return _cache.getBack<String>(cacheId: cacheId)
 //                   .fold(() =>
 //                               request()
-//                                   .fold((failures) => failures.first.toInvalid(), 
+//                                   .fold((failures) => failures.first.toInvalid(),
 //                                         (val) {
 //                                           _cache.add(object: val!, cacheId: cacheId, expireAfter: cacheDuration);
 //                                           return Valid(val as String);
-//                                         }), 
+//                                         }),
 //                         (some) => Valid(some).toFuture());
 // }
 
-class RequestX {  
+class RequestX {
   bool _decodeResponseBodyBytes = false;
   bool _getResponseBytes = false;
   Duration _cacheDuration = Duration(seconds:30);
@@ -135,7 +134,7 @@ class RequestX {
   final String _authority;
   final String _url;
   String _unencodedPath = '';
-  
+
   final Map<String, String> _headers = {};
   final Map<String, dynamic> _params = {};
   final Map<String, dynamic> _jsonBody = {};
@@ -147,12 +146,12 @@ class RequestX {
 
   RequestX.fromUrl (this._url) : _authority = '';
 
-  Uri getUri() => _url.isEmpty 
-                        ? _isHttps 
+  Uri getUri() => _url.isEmpty
+                        ? _isHttps
                             ? Uri.https(_authority, _unencodedPath, _params)
                             : Uri.http(_authority, _unencodedPath, _params)
                         : Uri.parse (_url);
-  
+
    /// L'`assert` all'interno del metodo viene richiamato solo nel Debug, \
   /// per essere sicuri che l'autority sia corretta ossia non inizi con http e che non contenga /
   static void _debugCheckAuthorityFormat(String authority) {
@@ -203,8 +202,8 @@ class RequestX {
         break;
     }
 
-    return IsolateManager.prepare(isolateParams, 
-                                  isolateEntryPoint: entryPoint, 
+    return IsolateManager.prepare(isolateParams,
+                                  isolateEntryPoint: entryPoint,
                                   timeout: timeout,
                                   customMessageToError: (error) {
                                     if (error.startsWith('Bad response')) {
@@ -313,7 +312,7 @@ extension Fluent on RequestX {
   /// Usare per salvare il rilultato nella cache o riottenerlo alla prossiam chiamata.
   /// L'id della cache è l'url di chiamata
   RequestX useCache ({Duration duration = const Duration(seconds:30)}) {
-    _useCache = true;    
+    _useCache = true;
     _cacheDuration = duration;
     return this;
   }
@@ -346,9 +345,9 @@ extension Fluent on RequestX {
   }
 
   /// La `doRequest`fa la chiamata senza isolate
-  /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`._authoritySe è stata impostata la cache tramite `useCache` tenta di recuperare 
+  /// Per eseguire la chiamata in un isolate, usare `doIsolateRequest()`._authoritySe è stata impostata la cache tramite `useCache` tenta di recuperare
   /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
-  /// l'url della chiamata. 
+  /// l'url della chiamata.
   Future<Validation<T>> doRequest<T> ()
   {
     var uri = getUri();
@@ -384,7 +383,7 @@ extension Fluent on RequestX {
     }
 
     var preparedRequest = () => request()
-                                  .timeout(_timeout)                      
+                                  .timeout(_timeout)
                                   .then((response) {
                                     if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
                                       if(_getResponseBytes)
@@ -392,7 +391,7 @@ extension Fluent on RequestX {
                                         return Valid(response.bodyBytes as T);
                                       }
                                       // Usiamo la utf8.decode perché in alcuni casi diceva che il body della response era malformed (Che aria è)
-                                      // Forse adesso è risolto ma non si sa mai. 
+                                      // Forse adesso è risolto ma non si sa mai.
                                       // Se senza il decode dà un malformed, chiamare il metodo decodeResponseBodyBytes sulla RequestX
                                       else if(_decodeResponseBodyBytes)
                                       {
@@ -401,16 +400,16 @@ extension Fluent on RequestX {
                                       else
                                       {
                                         return Valid(response.body as T);
-                                      }                                      
+                                      }
                                     } else {
                                       return BadResponseException(response.statusCode, responseMessage: response.body).toInvalid<T>();
-                                    }      
+                                    }
                                   })
                                   .catchError((e) {
                                       if (e is Exception)
                                       {
                                         return e.toInvalid<T>();
-                                      } 
+                                      }
                                       else if (e is Error)
                                       {
                                         return e.toInvalid<T>();
@@ -427,9 +426,9 @@ extension Fluent on RequestX {
     return SingletonHttpCacheManager().getCacheOrDoRequest<T>(preparedRequest, cacheId, _cacheDuration);
   }
 
-  /// Esegue la richiesta in un isolate. Se è stata impostata la cache tramite `useCache` tenta di recuperare 
+  /// Esegue la richiesta in un isolate. Se è stata impostata la cache tramite `useCache` tenta di recuperare
   /// il valore dalla cache. Se non esiste, esegue la chiamata e poi salva il valore nella cache usando come id
-  /// l'url della chiamata. 
+  /// l'url della chiamata.
   Future<Validation> doIsolateRequest ()
   {
     var uri = getUri();
@@ -447,7 +446,7 @@ extension Fluent on RequestX {
     {
       return request();
     }
-    
+
     return SingletonHttpCacheManager().getCacheOrDoRequest(request, cacheId, _cacheDuration);
   }
 }
